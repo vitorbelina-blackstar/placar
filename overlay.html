@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Placar na Live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="placar.css">
+<style>
+  html, body { margin: 0; padding: 0; background: transparent !important; overflow: hidden; }
+  #wrap { position: fixed; font-size: 28px; }
+  #wrap.tl { top: 3vh; left: 3vw; }
+  #wrap.tr { top: 3vh; right: 3vw; }
+  #wrap.bl { bottom: 3vh; left: 3vw; }
+  #wrap.br { bottom: 3vh; right: 3vw; }
+  #wrap.hide { display: none; }
+</style>
+</head>
+<body>
+<div id="wrap" class="tl hide"></div>
+<script src="core.js"></script>
+<script>
+  // Parâmetros: ?sala=CODIGO&pos=tl|tr|bl|br&tam=28
+  const q = new URLSearchParams(location.search);
+  const sala = q.get("sala") || "";
+  const wrap = document.getElementById("wrap");
+  wrap.className = (q.get("pos") || "tl");
+  const tam = parseFloat(q.get("tam"));
+  if (tam > 5 && tam < 200) wrap.style.fontSize = tam + "px";
+
+  let atual = null;
+  function aplicar(s) {
+    if (!s || !s.sets) return;
+    if (atual && s.ts && atual.ts && s.ts < atual.ts) return; // ignora estado mais antigo
+    atual = s;
+    wrap.innerHTML = placarHTML(s);
+    wrap.classList.remove("hide");
+  }
+
+  if (!sala) {
+    wrap.classList.remove("hide");
+    wrap.innerHTML = '<div class="sb" style="padding:.6em 1em;font-size:.7em">Falta o código da sala no link (?sala=...)</div>';
+  } else {
+    const buscar = () => ultimoEstado(sala).then(aplicar).catch(() => { });
+    buscar();
+    ouvirEstado(sala, aplicar);
+    setInterval(buscar, 20000); // garantia caso a conexão ao vivo caia
+  }
+</script>
+</body>
+</html>

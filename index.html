@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1622">
+<title>Placar Tênis — Controle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="placar.css">
+<style>
+  :root {
+    --bg: #0b1622; --panel: #13212f; --panel2: #1a2c3e; --line: #24384c;
+    --txt: #eef2f6; --dim: #8ea2b6; --ball: #d7f23a; --ink: #0b1622;
+    --p1: #3aa0ff; --p2: #ff7a45; --danger: #ff5d5d; --ok: #46d483;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--txt); font-family: Barlow, system-ui, sans-serif; }
+  body { padding: max(14px, env(safe-area-inset-top)) 16px 40px; max-width: 560px; margin: 0 auto; }
+  button { font: inherit; cursor: pointer; border: 0; }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 14px; }
+  .brand { font-family: "Barlow Condensed", "Arial Narrow", sans-serif; font-weight: 700; font-size: 20px; letter-spacing: .06em; text-transform: uppercase; }
+  .brand b { color: var(--ball); }
+  .pill { font-size: 13px; padding: 5px 10px; border-radius: 99px; background: var(--panel); color: var(--dim); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .pill i { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); display: block; }
+  .pill.ok i { background: var(--ok); } .pill.err i { background: var(--danger); } .pill.wait i { background: var(--ball); }
+
+  .preview { background: repeating-linear-gradient(135deg, #1d5a3a 0 22px, #1a5235 22px 44px); border-radius: 12px; padding: 18px 14px; display: flex; justify-content: center; margin-bottom: 12px; font-size: 22px; overflow: hidden; }
+  .fase { text-align: center; font-family: "Barlow Condensed", "Arial Narrow", sans-serif; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ball); font-size: 17px; margin: 4px 0 12px; }
+  .fase.fim { color: var(--ok); }
+
+  .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .big { min-height: 132px; border-radius: 14px; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 10px; transition: transform .08s, filter .15s; }
+  .big:active { transform: scale(.97); }
+  .big .plus { font-family: "Barlow Condensed", "Arial Narrow", sans-serif; font-weight: 700; font-size: 40px; line-height: 1; }
+  .big .who { font-weight: 600; font-size: 16px; text-transform: uppercase; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .big.a { background: var(--p1); } .big.b { background: var(--p2); }
+  .big:disabled { filter: grayscale(1) brightness(.5); }
+
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .sec { background: var(--panel2); color: var(--txt); border-radius: 12px; padding: 14px; font-weight: 600; font-size: 15px; }
+  .sec:active { background: var(--line); }
+
+  details { background: var(--panel); border-radius: 12px; margin-top: 18px; }
+  summary { padding: 14px 16px; font-weight: 600; list-style: none; display: flex; justify-content: space-between; }
+  summary::after { content: "▾"; color: var(--dim); }
+  details[open] summary::after { content: "▴"; }
+  .cfg { padding: 0 16px 16px; display: grid; gap: 12px; }
+  label { font-size: 13px; color: var(--dim); display: grid; gap: 5px; }
+  input, select { font: inherit; font-size: 16px; color: var(--txt); background: var(--bg); border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px; width: 100%; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .link { font-size: 13px; word-break: break-all; background: var(--bg); border: 1px dashed var(--line); border-radius: 9px; padding: 10px; color: var(--ball); }
+  .act { background: var(--ball); color: var(--ink); border-radius: 9px; padding: 11px; font-weight: 600; }
+  .ghost { background: transparent; border: 1px solid var(--line); color: var(--txt); border-radius: 9px; padding: 11px; font-weight: 600; }
+  .danger { background: transparent; border: 1px solid var(--danger); color: var(--danger); border-radius: 9px; padding: 11px; font-weight: 600; }
+  .danger.armed { background: var(--danger); color: #fff; }
+  .note { font-size: 12.5px; color: var(--dim); line-height: 1.45; margin: 0; }
+  .warn { background: #3a2a10; color: #ffd27a; border-radius: 10px; padding: 10px 12px; font-size: 13px; margin-bottom: 12px; display: none; }
+</style>
+</head>
+<body>
+  <div class="top">
+    <div class="brand">Placar <b>Tênis</b></div>
+    <div class="pill wait" id="sync"><i></i><span>Conectando…</span></div>
+  </div>
+
+  <div class="warn" id="warnFile">Você abriu o arquivo direto do computador. Para funcionar na live, abra pelo endereço do site (veja o LEIA-ME).</div>
+
+  <div class="preview"><div id="sb"></div></div>
+  <div class="fase" id="fase"></div>
+
+  <div class="btns">
+    <button class="big a" id="b0"><span class="plus">+1</span><span class="who" id="w0"></span></button>
+    <button class="big b" id="b1"><span class="plus">+1</span><span class="who" id="w1"></span></button>
+  </div>
+  <div class="row2">
+    <button class="sec" id="undo">↶ Desfazer</button>
+    <button class="sec" id="saque">🎾 Trocar saque</button>
+  </div>
+
+  <details id="det">
+    <summary>Jogadores e configurações</summary>
+    <div class="cfg">
+      <div class="two">
+        <label>Jogador 1 (azul)<input id="n0" maxlength="22"></label>
+        <label>Jogador 2 (laranja)<input id="n1" maxlength="22"></label>
+      </div>
+      <label>Título no placar (ex.: torneio, categoria)<input id="tit" maxlength="30" placeholder="TÊNIS"></label>
+
+      <label>Código da sala (o mesmo vai no link do Larix)<input id="sala" maxlength="24"></label>
+      <div class="two">
+        <label>Posição na tela
+          <select id="pos">
+            <option value="tl">Canto superior esquerdo</option>
+            <option value="tr">Canto superior direito</option>
+            <option value="bl">Canto inferior esquerdo</option>
+            <option value="br">Canto inferior direito</option>
+          </select>
+        </label>
+        <label>Tamanho
+          <select id="tam">
+            <option value="20">Pequeno</option>
+            <option value="28" selected>Médio</option>
+            <option value="36">Grande</option>
+            <option value="46">Muito grande</option>
+          </select>
+        </label>
+      </div>
+      <label>Link para colar no Larix (Overlays → Web Widget)</label>
+      <div class="link" id="link"></div>
+      <div class="two">
+        <button class="act" id="copiar">Copiar link</button>
+        <button class="ghost" id="reenviar">Reenviar placar</button>
+      </div>
+      <button class="danger" id="novo">Novo jogo (zerar placar)</button>
+      <p class="note">Regras: melhor de 3 sets contando só games (set em 6 com 2 de vantagem, 7-5 ou 7-6). Se ficar 1 set a 1, entra o super tiebreak até 10 pontos (2 de diferença). O saque troca sozinho a cada game; use "Trocar saque" para acertar quem começa.</p>
+    </div>
+  </details>
+
+<script src="core.js"></script>
+<script>
+  const $ = id => document.getElementById(id);
+  const LS = "placarTenis.v1";
+  let cfg, estado, hist = [];
+
+  function salaAleatoria() {
+    const c = "abcdefghjkmnpqrstuvwxyz23456789"; let s = "";
+    for (let i = 0; i < 6; i++) s += c[Math.floor(Math.random() * c.length)];
+    return s;
+  }
+  function carregar() {
+    try {
+      const d = JSON.parse(localStorage.getItem(LS) || "null");
+      if (d && d.estado) { cfg = d.cfg; estado = d.estado; hist = d.hist || []; return; }
+    } catch (e) { }
+    cfg = { sala: salaAleatoria(), pos: "tl", tam: "28" };
+    estado = novoJogo();
+  }
+  function guardar() {
+    try { localStorage.setItem(LS, JSON.stringify({ cfg, estado, hist: hist.slice(-200) })); } catch (e) { }
+  }
+
+  // ---- envio com pequeno atraso para juntar toques rápidos ----
+  let tEnvio = null, tRetry = null;
+  function status(cls, txt) { const p = $("sync"); p.className = "pill " + cls; p.querySelector("span").textContent = txt; }
+  function agendarEnvio(rapido) {
+    clearTimeout(tEnvio); clearTimeout(tRetry);
+    status("wait", "Enviando…");
+    tEnvio = setTimeout(enviar, rapido ? 0 : 350);
+  }
+  async function enviar() {
+    try {
+      await enviarEstado(cfg.sala, estado);
+      const h = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      status("ok", "Na live · " + h);
+    } catch (e) {
+      status("err", "Sem conexão — tentando de novo");
+      tRetry = setTimeout(enviar, 4000);
+    }
+  }
+
+  function linkOverlay() {
+    const base = location.href.split("#")[0].split("?")[0].replace(/[^/]*$/, "");
+    return base + "overlay.html?sala=" + encodeURIComponent(cfg.sala) + "&pos=" + cfg.pos + "&tam=" + cfg.tam;
+  }
+
+  function render() {
+    $("sb").innerHTML = placarHTML(estado);
+    const f = fase(estado);
+    const fz = $("fase");
+    fz.className = "fase" + (f === "fim" ? " fim" : "");
+    fz.textContent = f === "fim" ? "Fim de jogo · " + estado.nomes[estado.vencedor] + " venceu"
+      : f === "stb" ? "Super tiebreak · até 10 pontos"
+      : estado.sets.length + "º set";
+    const unid = f === "stb" ? "ponto" : "game";
+    [0, 1].forEach(p => {
+      $("w" + p).textContent = estado.nomes[p];
+      $("b" + p).querySelector(".plus").textContent = "+1 " + unid;
+      $("b" + p).disabled = f === "fim";
+    });
+    $("undo").disabled = hist.length === 0;
+    $("link").textContent = linkOverlay();
+  }
+
+  function mudar(novo) {
+    hist.push(estado);
+    estado = novo;
+    guardar(); render(); agendarEnvio();
+  }
+
+  // ---- eventos ----
+  [0, 1].forEach(p => $("b" + p).addEventListener("click", () => {
+    if (navigator.vibrate) navigator.vibrate(30);
+    mudar(marcar(estado, p));
+  }));
+  $("undo").addEventListener("click", () => {
+    if (!hist.length) return;
+    estado = hist.pop(); estado.ts = Date.now();
+    guardar(); render(); agendarEnvio();
+  });
+  $("saque").addEventListener("click", () => {
+    const s = JSON.parse(JSON.stringify(estado)); s.saque = 1 - s.saque; s.ts = Date.now(); mudar(s);
+  });
+
+  function preencherCfg() {
+    $("n0").value = estado.nomes[0]; $("n1").value = estado.nomes[1];
+    $("tit").value = estado.titulo || ""; $("sala").value = cfg.sala;
+    $("pos").value = cfg.pos; $("tam").value = cfg.tam;
+  }
+  ["n0", "n1", "tit"].forEach(id => $(id).addEventListener("input", () => {
+    estado.nomes = [$("n0").value.trim() || "Jogador 1", $("n1").value.trim() || "Jogador 2"];
+    estado.titulo = $("tit").value.trim();
+    estado.ts = Date.now();
+    guardar(); render(); agendarEnvio();
+  }));
+  $("sala").addEventListener("change", () => {
+    const v = $("sala").value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    cfg.sala = v || salaAleatoria(); $("sala").value = cfg.sala;
+    guardar(); render(); agendarEnvio(true);
+  });
+  ["pos", "tam"].forEach(id => $(id).addEventListener("change", () => { cfg[id] = $(id).value; guardar(); render(); }));
+
+  $("copiar").addEventListener("click", async () => {
+    const t = linkOverlay();
+    try { await navigator.clipboard.writeText(t); $("copiar").textContent = "Copiado ✓"; }
+    catch (e) {
+      const r = document.createRange(); r.selectNodeContents($("link"));
+      const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+      $("copiar").textContent = "Selecionado — copie";
+    }
+    setTimeout(() => $("copiar").textContent = "Copiar link", 2000);
+  });
+  $("reenviar").addEventListener("click", () => { estado.ts = Date.now(); agendarEnvio(true); });
+
+  let armado = null;
+  $("novo").addEventListener("click", () => {
+    const b = $("novo");
+    if (!armado) {
+      b.classList.add("armed"); b.textContent = "Toque de novo para confirmar";
+      armado = setTimeout(() => { armado = null; b.classList.remove("armed"); b.textContent = "Novo jogo (zerar placar)"; }, 3000);
+      return;
+    }
+    clearTimeout(armado); armado = null; b.classList.remove("armed"); b.textContent = "Novo jogo (zerar placar)";
+    hist = [];
+    estado = novoJogo(estado.nomes.slice(), estado.titulo);
+    guardar(); render(); agendarEnvio(true);
+  });
+
+  // ---- início ----
+  carregar();
+  if (location.protocol === "file:") $("warnFile").style.display = "block";
+  if (estado.nomes[0] === "Jogador 1" && estado.nomes[1] === "Jogador 2") $("det").open = true;
+  preencherCfg(); render(); agendarEnvio(true);
+</script>
+</body>
+</html>

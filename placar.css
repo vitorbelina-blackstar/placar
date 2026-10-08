@@ -1,0 +1,62 @@
+/* Visual do placar (igual no controle e na transmissão) */
+.sb {
+  --sb-bg: #0d1b2a;
+  --sb-bg2: #15283d;
+  --sb-line: rgba(255,255,255,.08);
+  --sb-txt: #f4f6f8;
+  --sb-dim: #8fa3b8;
+  --sb-ball: #d7f23a;
+  --sb-cur-txt: #0d1b2a;
+  font-family: "Barlow Condensed", "Arial Narrow", Arial, sans-serif;
+  display: inline-block;
+  color: var(--sb-txt);
+  background: var(--sb-bg);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 4px 18px rgba(0,0,0,.45);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  min-width: 15em;
+}
+.sb-hdr {
+  display: flex; align-items: center;
+  background: var(--sb-ball);
+  color: var(--sb-cur-txt);
+  font-weight: 700; font-size: .62em; letter-spacing: .12em;
+  height: 1.9em; padding-left: .9em;
+}
+.sb-ttl { flex: 1; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 1em; }
+.sb-hc { width: calc(2.3em / .62); text-align: center; opacity: .75; }
+.sb-row {
+  display: flex; align-items: center;
+  height: 2.1em; font-size: 1em;
+  border-top: 1px solid var(--sb-line);
+}
+.sb-row:nth-child(3) { background: var(--sb-bg2); }
+.sb-srv { width: 1.1em; display: flex; justify-content: center; align-items: center; }
+.ball {
+  display: block; width: .5em; height: .5em; border-radius: 50%;
+  background: var(--sb-ball);
+  box-shadow: 0 0 6px rgba(215,242,58,.7);
+}
+.sb-nm {
+  flex: 1; font-weight: 600; font-size: 1.05em; text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  padding-right: .8em; letter-spacing: .02em;
+}
+.sb-g {
+  width: calc(2.3em / 1.1); height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 600; font-size: 1.1em; color: var(--sb-dim);
+  border-left: 1px solid var(--sb-line);
+}
+.sb-g.w { color: var(--sb-txt); font-weight: 700; }
+.sb-g.cur { background: rgba(215,242,58,.16); color: var(--sb-ball); font-weight: 700; }
+.sb-g.tb.cur { background: var(--sb-ball); color: var(--sb-cur-txt); }
+.sb-row.lose .sb-nm { color: var(--sb-dim); }
+.sb-row.win .sb-nm { color: var(--sb-ball); }
+.sb-trophy { width: 1.6em; text-align: center; color: var(--sb-ball); font-weight: 700; }
+.sb-row.lose::after { content: ""; width: 1.6em; }
+.sb-hsp { width: calc(1.6em / .62); }
+.sb-shirt { width: 1.35em; display: flex; align-items: center; justify-content: flex-start; margin-right: .35em; }
+.shirt { width: 1.25em; height: 1.25em; display: block; filter: drop-shadow(0 1px 1px rgba(0,0,0,.5)); }
