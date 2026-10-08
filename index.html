@@ -25,16 +25,22 @@
   .pill i { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); display: block; }
   .pill.ok i { background: var(--ok); } .pill.err i { background: var(--danger); } .pill.wait i { background: var(--ball); }
 
-  .preview { background: repeating-linear-gradient(135deg, #1d5a3a 0 22px, #1a5235 22px 44px); border-radius: 12px; padding: 18px 14px; display: flex; justify-content: center; margin-bottom: 12px; font-size: 22px; overflow: hidden; }
+  .preview { background: repeating-linear-gradient(135deg, #1d5a3a 0 22px, #1a5235 22px 44px); border-radius: 12px; padding: 18px 14px; display: flex; justify-content: center; margin-bottom: 12px; font-size: clamp(14px, 4.6vw, 22px); overflow: hidden; }
   .fase { text-align: center; font-family: "Barlow Condensed", "Arial Narrow", sans-serif; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ball); font-size: 17px; margin: 4px 0 12px; }
   .fase.fim { color: var(--ok); }
 
   .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .big { min-height: 132px; border-radius: 14px; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 10px; transition: transform .08s, filter .15s; }
   .big:active { transform: scale(.97); }
-  .big .plus { font-family: "Barlow Condensed", "Arial Narrow", sans-serif; font-weight: 700; font-size: 40px; line-height: 1; }
+  .big .plus { font-family: "Barlow Condensed", "Arial Narrow", sans-serif; font-weight: 700; font-size: 32px; line-height: 1; white-space: nowrap; }
   .big .who { font-weight: 600; font-size: 16px; text-transform: uppercase; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .big.a { background: var(--p1); } .big.b { background: var(--p2); }
+  .big { background: var(--p1); }
+  .big.claro { color: #0b1622; }
+  .big .shirt { width: 30px; height: 30px; }
+  .cores { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 2px; }
+  .cor { aspect-ratio: 1; border-radius: 8px; border: 2px solid transparent; background: var(--bg); padding: 3px; display: flex; align-items: center; justify-content: center; }
+  .cor .shirt { width: 100%; height: 100%; }
+  .cor.sel { border-color: var(--ball); background: var(--panel2); }
   .big:disabled { filter: grayscale(1) brightness(.5); }
 
   .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
@@ -82,8 +88,8 @@
     <summary>Jogadores e configurações</summary>
     <div class="cfg">
       <div class="two">
-        <label>Jogador 1 (azul)<input id="n0" maxlength="22"></label>
-        <label>Jogador 2 (laranja)<input id="n1" maxlength="22"></label>
+        <div style="display:grid;gap:6px"><label>Jogador 1<input id="n0" maxlength="22"></label><div class="cores" id="c0"></div></div>
+        <div style="display:grid;gap:6px"><label>Jogador 2<input id="n1" maxlength="22"></label><div class="cores" id="c1"></div></div>
       </div>
       <label>Título no placar (ex.: torneio, categoria)<input id="tit" maxlength="30" placeholder="TÊNIS"></label>
 
@@ -175,6 +181,10 @@
     const unid = f === "stb" ? "ponto" : "game";
     [0, 1].forEach(p => {
       $("w" + p).textContent = estado.nomes[p];
+      const cor = (estado.cores || CORES_PADRAO)[p];
+      $("b" + p).style.background = cor;
+      $("b" + p).classList.toggle("claro", corClara(cor));
+      $("c" + p).querySelectorAll(".cor").forEach(el => el.classList.toggle("sel", el.dataset.c === cor));
       $("b" + p).querySelector(".plus").textContent = "+1 " + unid;
       $("b" + p).disabled = f === "fim";
     });
@@ -200,6 +210,17 @@
   });
   $("saque").addEventListener("click", () => {
     const s = JSON.parse(JSON.stringify(estado)); s.saque = 1 - s.saque; s.ts = Date.now(); mudar(s);
+  });
+
+  [0, 1].forEach(p => {
+    $("c" + p).innerHTML = CORES.map(k => `<button type="button" class="cor" data-c="${k.c}" title="${k.n}" aria-label="${k.n}">${camisetaSVG(k.c)}</button>`).join("");
+    $("c" + p).addEventListener("click", ev => {
+      const b = ev.target.closest(".cor"); if (!b) return;
+      ev.preventDefault();
+      if (!estado.cores) estado.cores = CORES_PADRAO.slice();
+      estado.cores[p] = b.dataset.c; estado.ts = Date.now();
+      guardar(); render(); agendarEnvio();
+    });
   });
 
   function preencherCfg() {
@@ -242,7 +263,7 @@
     }
     clearTimeout(armado); armado = null; b.classList.remove("armed"); b.textContent = "Novo jogo (zerar placar)";
     hist = [];
-    estado = novoJogo(estado.nomes.slice(), estado.titulo);
+    estado = novoJogo(estado.nomes.slice(), estado.titulo, (estado.cores || CORES_PADRAO).slice());
     guardar(); render(); agendarEnvio(true);
   });
 
