@@ -42,10 +42,15 @@
     wrap.classList.remove("hide");
     wrap.innerHTML = '<div class="sb" style="padding:.6em 1em;font-size:.7em">Falta o código da sala no link (?sala=...)</div>';
   } else {
-    const buscar = () => ultimoEstado(sala).then(aplicar).catch(() => { });
+    // mostra 0 a 0 na hora, até chegar o placar do controle
+    const ini = novoJogo(); ini.ts = 0; aplicar(ini);
+    const dbg = q.get("debug") === "1";
+    const info = (t) => { if (!dbg) return; let d = document.getElementById("dbg"); if (!d) { d = document.createElement("div"); d.id = "dbg"; d.style.cssText = "position:fixed;bottom:4px;left:4px;font:14px Arial;color:#fff;background:#000a;padding:4px 8px;border-radius:4px"; document.body.appendChild(d); } d.textContent = t; };
+    info("sala " + sala + " · conectando…");
+    const buscar = () => ultimoEstado(sala).then(s => { info("sala " + sala + " · ok " + new Date().toLocaleTimeString()); aplicar(s); }).catch(e => info("erro: " + e.message));
     buscar();
-    ouvirEstado(sala, aplicar);
-    setInterval(buscar, 20000); // garantia caso a conexão ao vivo caia
+    ouvirEstado(sala, s => { info("sala " + sala + " · ao vivo " + new Date().toLocaleTimeString()); aplicar(s); });
+    setInterval(buscar, 15000); // garantia caso a conexão ao vivo caia
   }
 </script>
 </body>
