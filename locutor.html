@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Locutor do Placar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="placar.css">
+<style>
+  :root { --bg:#0b1622; --panel:#13212f; --panel2:#1a2c3e; --line:#24384c; --txt:#eef2f6; --dim:#8ea2b6; --ball:#d7f23a; --ink:#0b1622; --ok:#46d483; --danger:#ff5d5d; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; background:var(--bg); color:var(--txt); font-family:Barlow, system-ui, sans-serif; }
+  body { padding:20px 16px 40px; max-width:620px; margin:0 auto; }
+  h1 { font-family:"Barlow Condensed","Arial Narrow",sans-serif; font-weight:700; letter-spacing:.06em; text-transform:uppercase; font-size:22px; margin:0 0 14px; }
+  h1 b { color:var(--ball); }
+  .card { background:var(--panel); border-radius:12px; padding:16px; margin-bottom:12px; }
+  .preview { background:repeating-linear-gradient(135deg,#1d5a3a 0 22px,#1a5235 22px 44px); border-radius:12px; padding:16px; display:flex; justify-content:center; font-size:20px; margin-bottom:12px; }
+  label { font-size:13px; color:var(--dim); display:grid; gap:5px; }
+  input, select { font:inherit; font-size:15px; color:var(--txt); background:var(--bg); border:1px solid var(--line); border-radius:9px; padding:9px 11px; width:100%; }
+  input[type=range] { padding:0; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; }
+  button { font:inherit; font-weight:600; border:0; border-radius:10px; padding:12px 16px; cursor:pointer; }
+  .big { width:100%; font-size:18px; padding:18px; background:var(--ball); color:var(--ink); }
+  .big.on { background:var(--ok); }
+  .ghost { background:var(--panel2); color:var(--txt); }
+  .status { display:flex; align-items:center; gap:8px; font-size:14px; color:var(--dim); margin:10px 0 0; }
+  .status i { width:9px; height:9px; border-radius:50%; background:var(--dim); display:block; }
+  .status.ok i { background:var(--ok); } .status.err i { background:var(--danger); }
+  .log { font-size:14px; line-height:1.5; max-height:220px; overflow:auto; }
+  .log div { padding:6px 0; border-top:1px solid var(--line); }
+  .log div:first-child { border-top:0; }
+  .log small { color:var(--dim); margin-right:6px; }
+  .chk { display:flex; align-items:center; gap:8px; font-size:14px; color:var(--txt); }
+  .chk input { width:auto; }
+  .note { font-size:12.5px; color:var(--dim); line-height:1.5; margin:8px 0 0; }
+</style>
+</head>
+<body>
+  <h1>Locutor do <b>Placar</b></h1>
+
+  <div class="preview"><div id="sb"></div></div>
+
+  <div class="card">
+    <button class="big" id="ligar">▶ Ligar locutor</button>
+    <div class="status" id="st"><i></i><span>Desligado</span></div>
+  </div>
+
+  <div class="card">
+    <div class="grid">
+      <label>Código da sala<input id="sala" maxlength="24"></label>
+      <label>Voz<select id="voz"></select></label>
+      <label>Volume<input type="range" id="vol" min="0" max="1" step="0.05" value="1"></label>
+      <label>Velocidade<input type="range" id="vel" min="0.7" max="1.4" step="0.05" value="1"></label>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <label class="chk"><input type="checkbox" id="vinheta" checked> Vinheta antes do anúncio</label>
+      <label class="chk"><input type="checkbox" id="cadaGame" checked> Anunciar todo game</label>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button class="ghost" id="testar">🔊 Testar voz</button>
+      <button class="ghost" id="repetir">↻ Repetir placar</button>
+    </div>
+    <p class="note">Dica: as vozes "Natural" do navegador Microsoft Edge (Francisca, Antonio, Thalita) são as mais parecidas com locutor de verdade.</p>
+  </div>
+
+  <div class="card">
+    <div style="font-weight:600;margin-bottom:6px">Últimos anúncios</div>
+    <div class="log" id="log"><div><small>—</small>Nada ainda.</div></div>
+  </div>
+
+<script src="core.js"></script>
+<script>
+  const $ = id => document.getElementById(id);
+  const LS = "locutorTenis.v1";
+  let cfg = { sala: "", voz: "", vol: 1, vel: 1, vinheta: true, cadaGame: true };
+  try { Object.assign(cfg, JSON.parse(localStorage.getItem(LS) || "{}")); } catch (e) { }
+  const q = new URLSearchParams(location.search);
+  if (q.get("sala")) cfg.sala = q.get("sala");
+  const salvar = () => { try { localStorage.setItem(LS, JSON.stringify(cfg)); } catch (e) { } };
+
+  let ligado = false, anterior = null, fechar = null, timer = null;
+
+  // ---------- vozes ----------
+  function carregarVozes() {
+    const todas = speechSynthesis.getVoices();
+    const pt = todas.filter(v => /^pt/i.test(v.lang));
+    const lista = (pt.length ? pt : todas).sort((a, b) => {
+      const pa = /BR/i.test(a.lang) ? 0 : 1, pb = /BR/i.test(b.lang) ? 0 : 1;
+      const na = /natural|online/i.test(a.name) ? 0 : 1, nb = /natural|online/i.test(b.name) ? 0 : 1;
+      return pa - pb || na - nb || a.name.localeCompare(b.name);
+    });
+    $("voz").innerHTML = lista.map(v => `<option value="${esc(v.name)}">${esc(v.name)} (${esc(v.lang)})</option>`).join("") || "<option>Voz padrão</option>";
+    if (cfg.voz && lista.some(v => v.name === cfg.voz)) $("voz").value = cfg.voz;
+    else if (lista[0]) cfg.voz = lista[0].name;
+  }
+  carregarVozes();
+  speechSynthesis.onvoiceschanged = carregarVozes;
+
+  // ---------- vinheta (dois tons curtos) ----------
+  let actx = null;
+  function vinheta() {
+    return new Promise(res => {
+      try {
+        actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+        const t = actx.currentTime;
+        [[880, 0], [1320, 0.16]].forEach(([f, d]) => {
+          const o = actx.createOscillator(), g = actx.createGain();
+          o.type = "sine"; o.frequency.value = f;
+          g.gain.setValueAtTime(0, t + d);
+          g.gain.linearRampToValueAtTime(0.25 * cfg.vol, t + d + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.001, t + d + 0.35);
+          o.connect(g); g.connect(actx.destination);
+          o.start(t + d); o.stop(t + d + 0.4);
+        });
+        setTimeout(res, 550);
+      } catch (e) { res(); }
+    });
+  }
+
+  // ---------- falar ----------
+  let seq = 0;
+  async function falar(texto, comVinheta) {
+    if (!texto) return;
+    const meu = ++seq;
+    speechSynthesis.cancel(); // fala sempre o placar mais recente
+    if (comVinheta && cfg.vinheta) await vinheta();
+    if (meu !== seq) return;
+    const u = new SpeechSynthesisUtterance(texto);
+    u.lang = "pt-BR";
+    const v = speechSynthesis.getVoices().find(v => v.name === cfg.voz);
+    if (v) u.voice = v;
+    u.volume = cfg.vol; u.rate = cfg.vel;
+    speechSynthesis.speak(u);
+    const hora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const log = $("log");
+    if (log.textContent === "—Nada ainda.") log.innerHTML = "";
+    const d = document.createElement("div");
+    d.innerHTML = `<small>${hora}</small>`;
+    d.appendChild(document.createTextNode(texto));
+    log.prepend(d);
+    while (log.children.length > 30) log.lastChild.remove();
+  }
+
+  // ---------- montar as frases ----------
+  const ord = ["primeiro", "segundo", "terceiro"];
+  const nome = (s, p) => (s.nomes && s.nomes[p]) || ("Jogador " + (p + 1));
+  const totalPontos = s => s.sets.reduce((a, g) => a + g[0] + g[1], 0) + (s.stb ? s.stb[0] + s.stb[1] + 1000 : 0) + (s.vencedor !== null ? 100000 : 0);
+
+  function placarSet(s, g, idx) {
+    const [a, b] = g;
+    const qual = ord[idx] + " set";
+    if (a === b) return `${a} a ${b}, iguais no ${qual}.`;
+    const p = a > b ? 0 : 1;
+    return `${Math.max(a, b)} a ${Math.min(a, b)} para ${nome(s, p)} no ${qual}.`;
+  }
+
+  function placarAtual(s) {
+    if (s.vencedor !== null) return fraseFim(s);
+    if (s.stb) {
+      const [a, b] = s.stb;
+      if (a === b) return `Super tiebreak, ${a} a ${b}.`;
+      const p = a > b ? 0 : 1;
+      return `Super tiebreak: ${Math.max(a, b)} a ${Math.min(a, b)} para ${nome(s, p)}.`;
+    }
+    const w = setsGanhos(s), i = s.sets.length - 1;
+    let t = "";
+    if (w[0] + w[1] > 0) t += w[0] === w[1] ? `Sets iguais, ${w[0]} a ${w[1]}. ` : `${nome(s, w[0] > w[1] ? 0 : 1)} vence por ${Math.max(...w)} set a ${Math.min(...w)}. `;
+    return t + placarSet(s, s.sets[i], i);
+  }
+
+  function parciais(s) {
+    const v = s.vencedor;
+    const ps = s.sets.filter(setFechado).map(g => `${g[v]} a ${g[1 - v]}`);
+    if (s.stb) ps.push(`${s.stb[v]} a ${s.stb[1 - v]} no super tiebreak`);
+    return ps.join(", ");
+  }
+  function fraseFim(s) {
+    return `Fim de jogo! Vitória de ${nome(s, s.vencedor)}! Parciais: ${parciais(s)}.`;
+  }
+
+  function anunciar(p, n) {
+    // novo jogo
+    if (n.vencedor === null && !n.stb && n.sets.length === 1 && n.sets[0][0] === 0 && n.sets[0][1] === 0 &&
+        totalPontos(p) >= 3) {
+      return { t: `Novo jogo! ${nome(n, 0)} contra ${nome(n, 1)}. Melhor de três sets.`, v: true };
+    }
+    // correção (desfazer)
+    if (totalPontos(n) < totalPontos(p)) {
+      return { t: `Correção no placar. ${placarAtual(n)}`, v: false };
+    }
+    if (totalPontos(n) === totalPontos(p)) return null; // só troca de saque/nome
+    // fim de jogo
+    if (n.vencedor !== null && p.vencedor === null) return { t: fraseFim(n), v: true };
+    // começou o super tiebreak
+    if (n.stb && !p.stb) {
+      const g = n.sets[n.sets.length - 1], q = g[0] > g[1] ? 0 : 1;
+      return { t: `Set para ${nome(n, q)}, ${Math.max(...g)} a ${Math.min(...g)}! Um set para cada lado. Vamos para o super tiebreak, até dez pontos!`, v: true };
+    }
+    // ponto no super tiebreak
+    if (n.stb && p.stb) {
+      const q = n.stb[0] > p.stb[0] ? 0 : 1;
+      const [a, b] = n.stb, lid = a > b ? 0 : (b > a ? 1 : null);
+      let t = `Ponto para ${nome(n, q)}. `;
+      t += lid === null ? `${a} a ${b}.` : `${Math.max(a, b)} a ${Math.min(a, b)} para ${nome(n, lid)}.`;
+      if (lid !== null && n.stb[lid] >= 9 && n.stb[lid] - n.stb[1 - lid] >= 1) t += " Match point!";
+      return { t, v: false };
+    }
+    // fechou um set (e o jogo continua)
+    if (n.sets.length > p.sets.length) {
+      const g = n.sets[n.sets.length - 2], q = g[0] > g[1] ? 0 : 1;
+      const w = setsGanhos(n);
+      return { t: `Set para ${nome(n, q)}, ${Math.max(...g)} a ${Math.min(...g)}! ${nome(n, q)} vence por ${Math.max(...w)} set a ${Math.min(...w)}.`, v: true };
+    }
+    // game comum
+    if (!cfg.cadaGame) return null;
+    const i = n.sets.length - 1, g = n.sets[i], gp = p.sets[i] || [0, 0];
+    const q = g[0] > gp[0] ? 0 : 1;
+    let t = `Game de ${nome(n, q)}. ` + placarSet(n, g, i);
+    if (g[0] === 6 && g[1] === 6) t += " Vai para o tiebreak!";
+    return { t, v: false };
+  }
+
+  // ---------- receber placar ----------
+  function receber(s) {
+    if (!s || !s.sets) return;
+    if (anterior && s.ts && anterior.ts && s.ts <= anterior.ts) return;
+    $("sb").innerHTML = placarHTML(s);
+    if (anterior && ligado) {
+      const a = anunciar(anterior, s);
+      if (a) falar(a.t, a.v);
+    }
+    anterior = s;
+  }
+
+  function status(cls, txt) { $("st").className = "status " + cls; $("st").querySelector("span").textContent = txt; }
+
+  function conectar() {
+    if (fechar) fechar();
+    clearInterval(timer);
+    if (!cfg.sala) { status("err", "Coloque o código da sala"); return; }
+    const buscar = () => ultimoEstado(cfg.sala).then(s => { if (s) receber(s); }).catch(() => { });
+    buscar();
+    fechar = ouvirEstado(cfg.sala, receber, ok => {
+      if (!ligado) return;
+      status(ok ? "ok" : "err", ok ? "Ligado · ouvindo a sala " + cfg.sala : "Reconectando…");
+    });
+    timer = setInterval(buscar, 15000);
+  }
+
+  // ---------- botões ----------
+  $("sala").value = cfg.sala;
+  $("vol").value = cfg.vol; $("vel").value = cfg.vel;
+  $("vinheta").checked = cfg.vinheta; $("cadaGame").checked = cfg.cadaGame;
+
+  $("ligar").addEventListener("click", () => {
+    ligado = !ligado;
+    $("ligar").classList.toggle("on", ligado);
+    $("ligar").textContent = ligado ? "■ Locutor ligado — clique para desligar" : "▶ Ligar locutor";
+    if (ligado) {
+      status("ok", "Ligado · ouvindo a sala " + cfg.sala);
+      falar("Locutor ligado. " + (anterior ? placarAtual(anterior) : ""), true);
+    } else {
+      speechSynthesis.cancel();
+      status("", "Desligado");
+    }
+  });
+  $("testar").addEventListener("click", () => falar("Game de Vitor Belina. 4 a 3 para Vitor Belina no segundo set.", true));
+  $("repetir").addEventListener("click", () => { if (anterior) falar(placarAtual(anterior), true); });
+  $("sala").addEventListener("change", () => {
+    cfg.sala = $("sala").value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    $("sala").value = cfg.sala; anterior = null; salvar(); conectar();
+  });
+  $("voz").addEventListener("change", () => { cfg.voz = $("voz").value; salvar(); });
+  $("vol").addEventListener("input", () => { cfg.vol = +$("vol").value; salvar(); });
+  $("vel").addEventListener("input", () => { cfg.vel = +$("vel").value; salvar(); });
+  $("vinheta").addEventListener("change", () => { cfg.vinheta = $("vinheta").checked; salvar(); });
+  $("cadaGame").addEventListener("change", () => { cfg.cadaGame = $("cadaGame").checked; salvar(); });
+
+  salvar();
+  conectar();
+</script>
+</body>
+</html>
