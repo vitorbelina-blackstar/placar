@@ -38,7 +38,7 @@
 </style>
 </head>
 <body>
-  <h1>Locutor do <b>Placar</b></h1>
+  <h1>Locutor do <b>Placar</b> <small style="font-size:11px;color:var(--dim);letter-spacing:0">v2</small></h1>
 
   <div class="preview"><div id="sb"></div></div>
 
@@ -62,7 +62,8 @@
       <button class="ghost" id="testar">🔊 Testar voz</button>
       <button class="ghost" id="repetir">↻ Repetir placar</button>
     </div>
-    <p class="note">Dica: as vozes "Natural" do navegador Microsoft Edge (Francisca, Antonio, Thalita) são as mais parecidas com locutor de verdade.</p>
+    <p class="note">Dica: as vozes "Natural" do navegador Microsoft Edge (Francisca, Antonio, Thalita) são as mais parecidas com locutor de verdade.<br>
+    Pode deixar esta janela atrás do OBS ou minimizada. No Edge, para garantir, vá em <b>edge://settings/system</b> → "Nunca colocar estes sites em suspensão" → adicione <b>github.io</b>.</p>
   </div>
 
   <div class="card">
@@ -114,7 +115,13 @@
           o.connect(g); g.connect(actx.destination);
           o.start(t + d); o.stop(t + d + 0.4);
         });
-        setTimeout(res, 550);
+        // termina pelo próprio áudio (não usa setTimeout, que o navegador atrasa em segundo plano)
+        let ok = false; const fim = () => { if (!ok) { ok = true; res(); } };
+        const os = actx.createOscillator(), gs = actx.createGain(); gs.gain.value = 0;
+        os.connect(gs); gs.connect(actx.destination); os.onended = fim;
+        os.start(t); os.stop(t + 0.55);
+        if (actx.state !== "running") actx.resume().catch(() => { });
+        setTimeout(fim, 1500); // segurança
       } catch (e) { res(); }
     });
   }
@@ -132,6 +139,7 @@
     const v = speechSynthesis.getVoices().find(v => v.name === cfg.voz);
     if (v) u.voice = v;
     u.volume = cfg.vol; u.rate = cfg.vel;
+    speechSynthesis.resume();
     speechSynthesis.speak(u);
     const hora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
     const log = $("log");
@@ -249,6 +257,44 @@
     timer = setInterval(buscar, 15000);
   }
 
+  // ---------- manter a página acordada ----------
+  // Um áudio praticamente inaudível fica tocando em loop. Assim o Edge/Chrome trata a aba
+  // como "tocando som" e não congela, não dorme nem atrasa a página quando a janela fica
+  // atrás do OBS, minimizada ou com a tela apagada.
+  let keep = null, wLock = null;
+  function wavQuase(seg) {
+    const sr = 8000, n = sr * seg, buf = new ArrayBuffer(44 + n), v = new DataView(buf);
+    const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    str(0, "RIFF"); v.setUint32(4, 36 + n, true); str(8, "WAVE"); str(12, "fmt ");
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, sr, true); v.setUint32(28, sr, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true);
+    str(36, "data"); v.setUint32(40, n, true);
+    for (let i = 0; i < n; i++) v.setUint8(44 + i, 128 + (i & 1));
+    return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
+  }
+  async function acordar() {
+    try {
+      if (!keep) { keep = new Audio(wavQuase(10)); keep.loop = true; }
+      if (keep.paused) await keep.play();
+    } catch (e) { }
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state !== "running") await actx.resume();
+    } catch (e) { }
+    try { if ("wakeLock" in navigator && !wLock) { wLock = await navigator.wakeLock.request("screen"); wLock.addEventListener("release", () => wLock = null); } } catch (e) { }
+  }
+  function dormir() {
+    if (keep) keep.pause();
+    if (wLock) { wLock.release().catch(() => { }); wLock = null; }
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (!ligado) return;
+    acordar();
+    if (!document.hidden) conectar(); // ao voltar, garante conexão e placar em dia
+  });
+  // vigia: se a voz "travar" em segundo plano, destrava
+  setInterval(() => { if (ligado && speechSynthesis.paused) speechSynthesis.resume(); }, 2000);
+
   // ---------- botões ----------
   $("sala").value = cfg.sala;
   $("vol").value = cfg.vol; $("vel").value = cfg.vel;
@@ -259,10 +305,12 @@
     $("ligar").classList.toggle("on", ligado);
     $("ligar").textContent = ligado ? "■ Locutor ligado — clique para desligar" : "▶ Ligar locutor";
     if (ligado) {
+      acordar();
       status("ok", "Ligado · ouvindo a sala " + cfg.sala);
       falar("Locutor ligado. " + (anterior ? placarAtual(anterior) : ""), true);
     } else {
       speechSynthesis.cancel();
+      dormir();
       status("", "Desligado");
     }
   });
