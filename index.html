@@ -61,12 +61,27 @@
   .danger { background: transparent; border: 1px solid var(--danger); color: var(--danger); border-radius: 9px; padding: 11px; font-weight: 600; }
   .danger.armed { background: var(--danger); color: #fff; }
   .note { font-size: 12.5px; color: var(--dim); line-height: 1.45; margin: 0; }
+  .watch { background: var(--panel); border-radius: 12px; margin-top: 12px; padding: 12px 14px; display: grid; gap: 10px; }
+  .watch.on { outline: 2px solid var(--ok); }
+  .watch .wtop { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .watch .wt { font-weight: 600; font-size: 15px; }
+  .watch .wst { font-size: 12.5px; color: var(--dim); }
+  .watch.on .wst { color: var(--ok); }
+  .wbtn { background: var(--ball); color: var(--ink); border-radius: 9px; padding: 10px 14px; font-weight: 600; white-space: nowrap; }
+  .watch.on .wbtn { background: transparent; border: 1px solid var(--danger); color: var(--danger); }
+  .wmap { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; font-size: 12.5px; text-align: center; }
+  .wmap div { background: var(--bg); border-radius: 8px; padding: 7px 4px; color: var(--dim); }
+  .wmap b { display: block; font-size: 18px; color: var(--txt); }
+  .wmap div.hit { background: var(--ok); color: var(--ink); }
+  .wmap div.hit b { color: var(--ink); }
+  .wopt { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--dim); }
+  .wopt input { width: auto; }
   .warn { background: #3a2a10; color: #ffd27a; border-radius: 10px; padding: 10px 12px; font-size: 13px; margin-bottom: 12px; display: none; }
 </style>
 </head>
 <body>
   <div class="top">
-    <div class="brand">Placar <b>Tênis</b> <small style="font-size:11px;color:var(--dim);letter-spacing:0">v3</small></div>
+    <div class="brand">Placar <b>Tênis</b> <small style="font-size:11px;color:var(--dim);letter-spacing:0">v4</small></div>
     <div class="pill wait" id="sync"><i></i><span>Conectando…</span></div>
   </div>
 
@@ -82,6 +97,19 @@
   <div class="row2">
     <button class="sec" id="undo">↶ Desfazer</button>
     <button class="sec" id="saque">🎾 Trocar saque</button>
+  </div>
+
+  <div class="watch" id="watch">
+    <div class="wtop">
+      <div><div class="wt">⌚ Controle pelo relógio</div><div class="wst" id="wst">Desligado</div></div>
+      <button class="wbtn" id="wbtn">Ligar</button>
+    </div>
+    <div class="wmap">
+      <div id="wm-next"><b>⏭</b><span id="wl-next"></span></div>
+      <div id="wm-prev"><b>⏮</b><span id="wl-prev"></span></div>
+      <div id="wm-play"><b>⏯</b>Desfazer</div>
+    </div>
+    <label class="wopt"><input type="checkbox" id="winv"> Inverter ⏭ / ⏮ (trocar qual botão é de cada jogador)</label>
   </div>
 
   <details id="det">
@@ -190,6 +218,7 @@
     });
     $("undo").disabled = hist.length === 0;
     $("link").textContent = linkOverlay();
+    if (typeof relogioRender === "function") relogioRender();
   }
 
   function mudar(novo) {
@@ -203,11 +232,13 @@
     if (navigator.vibrate) navigator.vibrate(30);
     mudar(marcar(estado, p));
   }));
-  $("undo").addEventListener("click", () => {
-    if (!hist.length) return;
+  function desfazer() {
+    if (!hist.length) return false;
     estado = hist.pop(); estado.ts = Date.now();
     guardar(); render(); agendarEnvio();
-  });
+    return true;
+  }
+  $("undo").addEventListener("click", desfazer);
   $("saque").addEventListener("click", () => {
     const s = JSON.parse(JSON.stringify(estado)); s.saque = 1 - s.saque; s.ts = Date.now(); mudar(s);
   });
@@ -266,6 +297,116 @@
     estado = novoJogo(estado.nomes.slice(), estado.titulo, (estado.cores || CORES_PADRAO).slice());
     guardar(); render(); agendarEnvio(true);
   });
+
+  // ---- controle pelo relógio (Amazfit via Zepp → botões de música) ----
+  // Uma faixa silenciosa fica "tocando"; o relógio manda ⏭ / ⏮ / ⏯ e a página
+  // transforma em +1 para cada jogador ou desfazer.
+  let wAudio = null, wOn = false, wUltimo = 0, wLock = null;
+  const WKEY = "placarTenis.relogio";
+  let wInv = false;
+  try { wInv = localStorage.getItem(WKEY) === "inv"; } catch (e) { }
+  $("winv").checked = wInv;
+
+  function wavSilencioso(seg) {
+    const sr = 8000, n = sr * seg, buf = new ArrayBuffer(44 + n), v = new DataView(buf);
+    const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    str(0, "RIFF"); v.setUint32(4, 36 + n, true); str(8, "WAVE"); str(12, "fmt ");
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, sr, true); v.setUint32(28, sr, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true);
+    str(36, "data"); v.setUint32(40, n, true);
+    for (let i = 0; i < n; i++) v.setUint8(44 + i, 128 + (i & 1)); // silêncio (ruído inaudível de 1 bit)
+    return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
+  }
+
+  function jogadorDo(botao) { // botao: "next" ou "prev"
+    const p = botao === "next" ? 0 : 1;
+    return wInv ? 1 - p : p;
+  }
+
+  function piscar(id) {
+    const el = $(id); el.classList.add("hit");
+    setTimeout(() => el.classList.remove("hit"), 600);
+  }
+
+  function comandoRelogio(cmd) {
+    const agora = Date.now();
+    if (agora - wUltimo < 700) return; // ignora toque duplicado
+    wUltimo = agora;
+    if (navigator.vibrate) navigator.vibrate(cmd === "undo" ? [40, 60, 40] : 60);
+    if (cmd === "undo") { desfazer(); piscar("wm-play"); }
+    else {
+      if (fase(estado) === "fim") return;
+      mudar(marcar(estado, jogadorDo(cmd)));
+      piscar(cmd === "next" ? "wm-next" : "wm-prev");
+    }
+    const h = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    $("wst").textContent = "Ligado · último comando " + h;
+    if (wAudio && wAudio.paused) wAudio.play().catch(() => { });
+  }
+
+  function textoPlacar() {
+    const f = fase(estado);
+    const a = f === "stb" ? estado.stb[0] : estado.sets[estado.sets.length - 1][0];
+    const b = f === "stb" ? estado.stb[1] : estado.sets[estado.sets.length - 1][1];
+    if (f === "fim") return { t: estado.nomes[estado.vencedor] + " venceu", s: "Fim de jogo" };
+    const sets = estado.sets.filter(setFechado).map(g => g[0] + "-" + g[1]).join(" ");
+    return {
+      t: estado.nomes[0] + " " + a + " x " + b + " " + estado.nomes[1],
+      s: (f === "stb" ? "Super tiebreak" : estado.sets.length + "º set") + (sets ? " · sets " + sets : "")
+    };
+  }
+
+  function relogioRender() {
+    $("wl-next").textContent = "+1 " + estado.nomes[jogadorDo("next")];
+    $("wl-prev").textContent = "+1 " + estado.nomes[jogadorDo("prev")];
+    if (wOn && "mediaSession" in navigator) {
+      const x = textoPlacar();
+      try { navigator.mediaSession.metadata = new MediaMetadata({ title: x.t, artist: x.s, album: "Placar Tênis" }); } catch (e) { }
+    }
+  }
+
+  async function manterTela() {
+    try { if ("wakeLock" in navigator && !wLock) { wLock = await navigator.wakeLock.request("screen"); wLock.addEventListener("release", () => wLock = null); } } catch (e) { }
+  }
+
+  async function ligarRelogio() {
+    if (!("mediaSession" in navigator)) { $("wst").textContent = "Este navegador não suporta. Use o Chrome no Android."; return; }
+    if (!wAudio) {
+      wAudio = new Audio(wavSilencioso(10));
+      wAudio.loop = true;
+    }
+    try { await wAudio.play(); } catch (e) { $("wst").textContent = "Não consegui iniciar o áudio. Toque em Ligar de novo."; return; }
+    const ms = navigator.mediaSession;
+    ms.setActionHandler("nexttrack", () => comandoRelogio("next"));
+    ms.setActionHandler("previoustrack", () => comandoRelogio("prev"));
+    ms.setActionHandler("play", () => comandoRelogio("undo"));
+    ms.setActionHandler("pause", () => comandoRelogio("undo"));
+    try { ms.setActionHandler("stop", () => comandoRelogio("undo")); } catch (e) { }
+    ms.playbackState = "playing";
+    wOn = true;
+    $("watch").classList.add("on"); $("wbtn").textContent = "Desligar";
+    $("wst").textContent = "Ligado · aguardando o relógio";
+    manterTela(); relogioRender();
+  }
+
+  function desligarRelogio() {
+    wOn = false;
+    if (wAudio) wAudio.pause();
+    const ms = navigator.mediaSession;
+    if (ms) ["nexttrack", "previoustrack", "play", "pause", "stop"].forEach(a => { try { ms.setActionHandler(a, null); } catch (e) { } });
+    if (ms) { ms.metadata = null; ms.playbackState = "none"; }
+    if (wLock) { wLock.release().catch(() => { }); wLock = null; }
+    $("watch").classList.remove("on"); $("wbtn").textContent = "Ligar";
+    $("wst").textContent = "Desligado";
+  }
+
+  $("wbtn").addEventListener("click", () => wOn ? desligarRelogio() : ligarRelogio());
+  $("winv").addEventListener("change", () => {
+    wInv = $("winv").checked;
+    try { localStorage.setItem(WKEY, wInv ? "inv" : ""); } catch (e) { }
+    relogioRender();
+  });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && wOn) manterTela(); });
 
   // ---- início ----
   carregar();
